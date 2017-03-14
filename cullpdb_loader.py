@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[22]:
+# In[1]:
 
 import gzip
 import os
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 get_ipython().magic('matplotlib inline')
 
 
-# In[62]:
+# In[2]:
 
 FILE = "data/cullpdb+profile_6133.npy.gz"
 FILEPATH = os.path.abspath(os.path.join(os.getcwd(), FILE))
@@ -19,8 +19,13 @@ TRAIN = 5600
 TEST = 5877
 VAL = 6133
 
-RESIDUES = 22
-LABELS = 31
+RESIDUE_IND = 22  # [0, 22) for each amino acid
+LABEL_IND = 31  # [22, 31) for each amino acid
+NUM_FEATURES = 57  # per residue
+NUM_RESIDUES = 700  # per protein
+
+RESIDUES = ['A', 'C', 'E', 'D', 'G', 'F', 'I', 'H', 'K', 'M',             'L', 'N', 'Q', 'P', 'S', 'R', 'T', 'W', 'V', 'Y', 'X','NoSeq']
+LABELS = ['L', 'B', 'E', 'G', 'I', 'H', 'S', 'T','NoSeq']
 
 
 # The 57 features are:<br>
@@ -39,7 +44,7 @@ LABELS = 31
 # "[5605,5877) test "<br>
 # "[5877,6133) validation"<br>
 
-# In[51]:
+# In[3]:
 
 #print(data[0][0:22])
 #print(data[0][22:31])
@@ -48,7 +53,7 @@ LABELS = 31
 #print(data[0][35:57])
 
 
-# In[56]:
+# In[4]:
 
 def load_file(file_path, absolute=False, verbose=True):
     if not absolute:
@@ -65,38 +70,119 @@ def load_file(file_path, absolute=False, verbose=True):
         return None
 
 
-# In[75]:
+# In[5]:
 
 def load_residues(file_path, absolute=False, verbose=True):
+    # extract first 22 columns of every 57 columns of each row
+    residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
+    label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
+    
     if verbose:
         print("Loading protein residues and labels...")
     data = load_file(file_path, absolute, verbose)
     if data is None:
         return None, None, None
     
-    # extract training residues (first 22 features of first 5600 proteins)
-    train_x = np.array( [data[i][0:RESIDUES] for i in range(TRAIN)] )
-    train_y = np.array( [data[i][RESIDUES:LABELS] for i in range(TRAIN)] )
+    # extract training residues
+    train_x = np.array( data[:TRAIN, residue_cols] )
+    train_y = np.array( data[:TRAIN, label_cols] )
     
-    test_x = np.array( [data[i][0:RESIDUES] for i in range(TRAIN, TEST)] )
-    test_y = np.array( [data[i][RESIDUES:LABELS] for i in range(TRAIN, TEST)] )
+    test_x = np.array( data[TRAIN:TEST, residue_cols] )
+    test_y = np.array( data[TRAIN:TEST, label_cols] )
     
-    val_x = np.array( [data[i][0:RESIDUES] for i in range(TEST, VAL)] )
-    val_y = np.array( [data[i][RESIDUES:LABELS] for i in range(TEST, VAL)] )
+    val_x = np.array( data[TEST:VAL, residue_cols] )
+    val_y = np.array( data[TEST:VAL, label_cols] )
     
     if verbose:
         print("Loaded protein residues and labels.")
     return (train_x, train_y), (val_x, val_y), (test_x, test_y)
 
 
-# In[76]:
+# In[12]:
+
+def load_residues_2D(file_path, absolute=False, verbose=True):
+    # extract first 22 columns of every 57 columns of each row
+    residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
+    label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
+    
+    if verbose:
+        print("Loading protein residues and labels...")
+    data = load_file(file_path, absolute, verbose)
+    if data is None:
+        return None, None, None
+    
+    # extract training residues
+    train_x = np.array( data[:TRAIN, residue_cols] )
+    train_x = train_x.reshape(TRAIN, 700, 22)
+    train_y = np.array( data[:TRAIN, label_cols] )
+    train_y = train_y.reshape(TRAIN, 700, 9)    
+    
+    test_x = np.array( data[TRAIN:TEST, residue_cols] )
+    test_x = test_x.reshape(TEST-TRAIN, 700, 22)
+    test_y = np.array( data[TRAIN:TEST, label_cols] )
+    test_y = test_y.reshape(TEST-TRAIN, 700, 9)
+    
+    val_x = np.array( data[TEST:VAL, residue_cols] )
+    val_x = val_x.reshape(VAL-TEST, 700, 22)
+    val_y = np.array( data[TEST:VAL, label_cols] )
+    val_y = val_y.reshape(VAL-TEST, 700, 9)
+    
+    if verbose:
+        print("Loaded protein residues and labels.")
+    return (train_x, train_y), (val_x, val_y), (test_x, test_y) 
 
 
+# In[6]:
+
+def print_residues(data, labels=None):
+    rs = []
+    lb = []
+    # len(data) should = NUM_RESIDUES * RESIDUE_IND
+    interval = RESIDUE_IND
+    for i in range(0, len(data), interval):
+        res = RESIDUES[np.argmax(data[i:i+interval])]
+        if res == 'NoSeq':
+            break
+        rs.append(res)
+            
+    if labels is not None:
+        interval = LABEL_IND - RESIDUE_IND
+        for i in range(0, len(rs)*interval, interval):
+            label = LABELS[np.argmax(labels[i:i+interval])]
+            lb.append(label)
+        print("Residues:")
+        print("".join(rs))
+        print("Labels:")
+        print("".join(lb))
+        return rs, lb
+    else:
+        print("".join(rs))
+        return rs
 
 
-# In[81]:
+# In[7]:
+
+def get_residues(): return RESIDUES[:]
+def get_labels(): return LABELS[:]
 
 
+# In[10]:
+
+def _tester():
+    path = "data/cullpdb+profile_6133.npy.gz"
+
+    train, validation, test = load_residues_2D(path)
+
+    train_x, train_y = train
+    print(train_x.shape)
+    print(train_y.shape)
+#    i = 69
+#    r, l = print_residues(train_x[i], labels=train_y[i])
+
+
+# In[13]:
+
+# _tester()
 
 
 # In[ ]:
