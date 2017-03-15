@@ -3,21 +3,20 @@
 
 # In[1]:
 
-import gzip
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-get_ipython().magic('matplotlib inline')
 
 
 # In[2]:
 
 FILE = "data/cullpdb+profile_6133.npy.gz"
+FILTERED = "data/cullpdb+profile_6133_filtered.npy.gz"
 FILEPATH = os.path.abspath(os.path.join(os.getcwd(), FILE))
 
-TRAIN = 5600
-TEST = 5877
-VAL = 6133
+TRAIN = 5600  # [0, 5600)
+TEST = 5877  # [5600, 5877)
+VAL = 6133  # [5877, 6133)
+DATA_SIZE = 6133
 
 RESIDUE_IND = 22  # [0, 22) for each amino acid
 LABEL_IND = 31  # [22, 31) for each amino acid
@@ -55,8 +54,8 @@ LABELS = ['L', 'B', 'E', 'G', 'I', 'H', 'S', 'T','NoSeq']
 
 # In[4]:
 
-def load_file(file_path, absolute=False, verbose=True):
-    if not absolute:
+def load_file(file_path, abspath=False, verbose=True):
+    if not abspath:
         file_path = os.path.abspath(os.path.join(os.getcwd(), file_path))
     if verbose:
         print("Loading file from ", file_path, "...", sep="")
@@ -70,20 +69,38 @@ def load_file(file_path, absolute=False, verbose=True):
         return None
 
 
-# In[5]:
+# In[12]:
 
-def load_residues(file_path, absolute=False, verbose=True):
+# train_only must be true to load filtered set
+def load_residues(file_path, abspath=False, verbose=True, train_only=False, two_d=False):
     # extract first 22 columns of every 57 columns of each row
     residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
     label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
     
     if verbose:
         print("Loading protein residues and labels...")
-    data = load_file(file_path, absolute, verbose)
+    data = load_file(file_path, abspath, verbose)
     if data is None:
         return None, None, None
     
-    # extract training residues
+    # load only training data for filtered
+    if train_only:
+        train_x = np.array( data[:, residue_cols] )
+        train_y = np.array( data[:, label_cols] )
+        if verbose:
+            print("Loaded protein residues and labels.")
+        if two_d:
+            if verbose:
+                print("Reshaping...")
+            train_x = train_x.reshape(len(train_x), 700, 22)
+            train_y = train_y.reshape(len(train_y), 700, 9)
+            if verbose:
+                print("Reshaped")
+        return (train_x, train_y)
+    
+    assert len(data) == DATA_SIZE, "Data has size: {0}".format(len(data))
+    
+    # extract training residues and labels
     train_x = np.array( data[:TRAIN, residue_cols] )
     train_y = np.array( data[:TRAIN, label_cols] )
     
@@ -92,60 +109,44 @@ def load_residues(file_path, absolute=False, verbose=True):
     
     val_x = np.array( data[TEST:VAL, residue_cols] )
     val_y = np.array( data[TEST:VAL, label_cols] )
+    
+    if two_d:
+        if verbose:
+            print("Reshaping...")
+        # reshape to 3d matrices - one residue per slice, one protein per row
+        train_x = train_x.reshape(TRAIN, 700, 22)
+        train_y = train_y.reshape(TRAIN, 700, 9)
+        test_x = test_x.reshape(TEST-TRAIN, 700, 22)
+        test_y = test_y.reshape(TEST-TRAIN, 700, 9)
+        val_x = val_x.reshape(VAL-TEST, 700, 22)
+        val_y = val_y.reshape(VAL-TEST, 700, 9)
+        if verbose:
+            print("Reshaped")
     
     if verbose:
         print("Loaded protein residues and labels.")
     return (train_x, train_y), (val_x, val_y), (test_x, test_y)
 
 
-# In[12]:
-
-def load_residues_2D(file_path, absolute=False, verbose=True):
-    # extract first 22 columns of every 57 columns of each row
-    residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
-    label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
-    
-    if verbose:
-        print("Loading protein residues and labels...")
-    data = load_file(file_path, absolute, verbose)
-    if data is None:
-        return None, None, None
-    
-    # extract training residues
-    train_x = np.array( data[:TRAIN, residue_cols] )
-    train_x = train_x.reshape(TRAIN, 700, 22)
-    train_y = np.array( data[:TRAIN, label_cols] )
-    train_y = train_y.reshape(TRAIN, 700, 9)    
-    
-    test_x = np.array( data[TRAIN:TEST, residue_cols] )
-    test_x = test_x.reshape(TEST-TRAIN, 700, 22)
-    test_y = np.array( data[TRAIN:TEST, label_cols] )
-    test_y = test_y.reshape(TEST-TRAIN, 700, 9)
-    
-    val_x = np.array( data[TEST:VAL, residue_cols] )
-    val_x = val_x.reshape(VAL-TEST, 700, 22)
-    val_y = np.array( data[TEST:VAL, label_cols] )
-    val_y = val_y.reshape(VAL-TEST, 700, 9)
-    
-    if verbose:
-        print("Loaded protein residues and labels.")
-    return (train_x, train_y), (val_x, val_y), (test_x, test_y) 
-
-
 # In[6]:
 
-def print_residues(data, labels=None):
+def print_residues(data, labels=None, two_d=False):
     rs = []
     lb = []
-    # len(data) should = NUM_RESIDUES * RESIDUE_IND
+    # len(data) should == NUM_RESIDUES * RESIDUE_IND
+    if two_d:
+        data = data.reshape(700*22)
     interval = RESIDUE_IND
     for i in range(0, len(data), interval):
         res = RESIDUES[np.argmax(data[i:i+interval])]
+        # break at end of protein
         if res == 'NoSeq':
             break
         rs.append(res)
             
     if labels is not None:
+        if two_d:
+            labels = labels.reshape(700*9)
         interval = LABEL_IND - RESIDUE_IND
         for i in range(0, len(rs)*interval, interval):
             label = LABELS[np.argmax(labels[i:i+interval])]
@@ -162,11 +163,41 @@ def print_residues(data, labels=None):
 
 # In[7]:
 
+def load_cb513(file_path, abspath=False, verbose=True, two_d=False):
+    if not abspath:
+        file_path = os.path.abspath(os.path.join(os.getcwd(), file_path))
+        
+    if verbose:
+        print("Loading file from ", file_path, "...", sep="")
+    try:
+        data = np.load(file_path)
+        if verbose:
+            print("File Loaded.")
+    except:
+        print("\n\nFile could not be found at", file_path, "\n\n")
+        return None
+    
+    # extract first 22 columns of every 57 columns of each row
+    residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
+    label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
+    
+    inputs = np.array( data[:, residue_cols] )
+    labels = np.array( data[:, label_cols] )
+    
+    if two_d:
+        inputs = inputs.reshape(len(inputs), 700, 22)
+        labels = labels.reshape(len(labels), 700, 9)
+        
+    return (inputs, labels)
+
+
+# In[8]:
+
 def get_residues(): return RESIDUES[:]
 def get_labels(): return LABELS[:]
 
 
-# In[10]:
+# In[9]:
 
 def _tester():
     path = "data/cullpdb+profile_6133.npy.gz"
@@ -180,12 +211,7 @@ def _tester():
 #    r, l = print_residues(train_x[i], labels=train_y[i])
 
 
-# In[13]:
+# In[10]:
 
 # _tester()
-
-
-# In[ ]:
-
-
 
