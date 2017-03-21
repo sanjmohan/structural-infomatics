@@ -23,8 +23,9 @@ LABEL_IND = 31  # [22, 31) for each amino acid
 NUM_FEATURES = 57  # per residue
 NUM_RESIDUES = 700  # per protein
 
-RESIDUES = ['A', 'C', 'E', 'D', 'G', 'F', 'I', 'H', 'K', 'M',             'L', 'N', 'Q', 'P', 'S', 'R', 'T', 'W', 'V', 'Y', 'X','NoSeq']
-LABELS = ['L', 'B', 'E', 'G', 'I', 'H', 'S', 'T','NoSeq']
+# Symbols: "-" placeholder for "NoSeq"
+RESIDUES = ['A', 'C', 'E', 'D', 'G', 'F', 'I', 'H', 'K', 'M',             'L', 'N', 'Q', 'P', 'S', 'R', 'T', 'W', 'V', 'Y', 'X','-']
+LABELS = ['L', 'B', 'E', 'G', 'I', 'H', 'S', 'T','-']
 
 
 # The 57 features are:<br>
@@ -69,10 +70,10 @@ def load_file(file_path, abspath=False, verbose=True):
         return None
 
 
-# In[12]:
+# In[5]:
 
-# train_only must be true to load filtered set
-def load_residues(file_path, abspath=False, verbose=True, train_only=False, two_d=False):
+# split must be false to load filtered set
+def load_residues(file_path, abspath=False, verbose=True, split=True, two_d=False):
     # extract first 22 columns of every 57 columns of each row
     residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
     label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
@@ -84,7 +85,7 @@ def load_residues(file_path, abspath=False, verbose=True, train_only=False, two_
         return None, None, None
     
     # load only training data for filtered
-    if train_only:
+    if not split:
         train_x = np.array( data[:, residue_cols] )
         train_y = np.array( data[:, label_cols] )
         if verbose:
@@ -130,7 +131,8 @@ def load_residues(file_path, abspath=False, verbose=True, train_only=False, two_
 
 # In[6]:
 
-def print_residues(data, labels=None, two_d=False):
+# short - if True, terminates sequence after finding first 'NoSeq'
+def print_residues(data, labels=None, two_d=False, short=True):
     rs = []
     lb = []
     # len(data) should == NUM_RESIDUES * RESIDUE_IND
@@ -140,7 +142,7 @@ def print_residues(data, labels=None, two_d=False):
     for i in range(0, len(data), interval):
         res = RESIDUES[np.argmax(data[i:i+interval])]
         # break at end of protein
-        if res == 'NoSeq':
+        if short and res == 'NoSeq':
             break
         rs.append(res)
             
@@ -173,22 +175,21 @@ def load_cb513(file_path, abspath=False, verbose=True, two_d=False):
         data = np.load(file_path)
         if verbose:
             print("File Loaded.")
+        # extract first 22 columns of every 57 columns of each row
+        residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
+        label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
+
+        inputs = np.array( data[:, residue_cols] )
+        labels = np.array( data[:, label_cols] )
+
+        if two_d:
+            inputs = inputs.reshape(len(inputs), 700, 22)
+            labels = labels.reshape(len(labels), 700, 9)
+
+        return (inputs, labels)
     except:
         print("\n\nFile could not be found at", file_path, "\n\n")
         return None
-    
-    # extract first 22 columns of every 57 columns of each row
-    residue_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if i % NUM_FEATURES < RESIDUE_IND]
-    label_cols = [i for i in range(NUM_RESIDUES*NUM_FEATURES) if RESIDUE_IND <= i % NUM_FEATURES < LABEL_IND]
-    
-    inputs = np.array( data[:, residue_cols] )
-    labels = np.array( data[:, label_cols] )
-    
-    if two_d:
-        inputs = inputs.reshape(len(inputs), 700, 22)
-        labels = labels.reshape(len(labels), 700, 9)
-        
-    return (inputs, labels)
 
 
 # In[8]:
