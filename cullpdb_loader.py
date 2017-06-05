@@ -95,7 +95,7 @@ def load_file(file_path, abspath=False, verbose=True):
 # In[6]:
 
 # split must be false to load filtered set
-def load_residues(file_path, abspath=False, verbose=True, split=True, two_d=False, pssm=False):
+def load_residues(file_path, abspath=False, verbose=True, split=True, two_d=False, pssm=True):
     num_features = RESIDUE_SIZE
     if pssm:
         num_features += RESIDUE_SIZE
@@ -186,7 +186,7 @@ def print_residues(data, labels=None, two_d=False, short=True):
 
 # In[8]:
 
-def load_cb513(file_path, abspath=False, verbose=True, two_d=False, pssm=False):
+def load_cb513(file_path, abspath=False, verbose=True, two_d=False, pssm=True):
     if not abspath:
         file_path = os.path.abspath(os.path.join(os.getcwd(), file_path))
         
